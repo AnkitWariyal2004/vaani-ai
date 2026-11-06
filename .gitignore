@@ -22,3 +22,9 @@ frontend/yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm

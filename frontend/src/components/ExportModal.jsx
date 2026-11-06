@@ -36,21 +36,68 @@ export const ExportModal = ({ isOpen, onClose, jobId, videoName }) => {
     },
   ];
 
-  const handleDownload = (formatId) => {
+  const handleDownload = async (formatId) => {
     setDownloadingFormat(formatId);
-    const url = api.getDownloadUrl(jobId, formatId, includeTimestamps);
-    
-    // Trigger browser download
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', '');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const url = api.getDownloadUrl(jobId, formatId, includeTimestamps);
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.setAttribute('download', `${videoName || 'transcript'}.${formatId}`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      } else {
+        throw new Error('Fallback to local export');
+      }
+    } catch {
+      // In-browser client export fallback for standalone cloud deployment
+      const currentJob = await api.getJob(jobId);
+      const segments = currentJob.transcript?.segments || [];
+      let content = '';
+      let mimeType = 'text/plain;charset=utf-8';
+      let extension = formatId;
+
+      if (formatId === 'srt') {
+        const formatSrtTime = (sec) => {
+          const h = Math.floor(sec / 3600);
+          const m = Math.floor((sec % 3600) / 60);
+          const s = Math.floor(sec % 60);
+          const ms = Math.floor((sec - Math.floor(sec)) * 1000);
+          return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+        };
+        content = segments.map((s, i) => `${i + 1}\n${formatSrtTime(s.start_time)} --> ${formatSrtTime(s.end_time)}\n${s.text}\n`).join('\n');
+      } else if (formatId === 'txt') {
+        content = includeTimestamps
+          ? segments.map((s) => `[${s.start_time.toFixed(1)}s - ${s.end_time.toFixed(1)}s] ${s.text}`).join('\n')
+          : currentJob.transcript?.full_text || segments.map((s) => s.text).join(' ');
+      } else if (formatId === 'json') {
+        mimeType = 'application/json;charset=utf-8';
+        content = JSON.stringify(currentJob.transcript, null, 2);
+      } else {
+        // Simple text document fallback for docx
+        extension = 'txt';
+        content = `VAANI AI TRANSCRIPTION REPORT\nVideo: ${videoName}\n\n${currentJob.transcript?.full_text}`;
+      }
+
+      const blob = new Blob([content], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `${videoName || 'transcript'}.${extension}`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    }
 
     setTimeout(() => {
       setDownloadingFormat(null);
-    }, 1200);
+    }, 1000);
   };
 
   return (
