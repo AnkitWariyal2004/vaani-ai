@@ -64,10 +64,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
+is_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": "/tmp/db.sqlite3" if is_vercel else BASE_DIR / "db.sqlite3",
     }
 }
 
