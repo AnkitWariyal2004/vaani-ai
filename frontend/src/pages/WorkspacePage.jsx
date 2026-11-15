@@ -7,6 +7,7 @@ import TranscriptEditor from '../components/TranscriptEditor';
 import StatusBadge from '../components/StatusBadge';
 import ExportModal from '../components/ExportModal';
 import ColabGuideModal from '../components/ColabGuideModal';
+import AIAssistantModal from '../components/AIAssistantModal';
 
 export const WorkspacePage = () => {
   const { id } = useParams();
@@ -16,6 +17,7 @@ export const WorkspacePage = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isColabGuideOpen, setIsColabGuideOpen] = useState(false);
+  const [isAIOpen, setIsAIOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const videoPlayerRef = useRef(null);
@@ -133,6 +135,16 @@ export const WorkspacePage = () => {
             <span>Colab Engine & Import</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => setIsAIOpen(true)}
+            className="btn btn-secondary"
+            style={{ fontSize: '0.825rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
+          >
+            <Sparkles size={15} color="#38bdf8" />
+            <span>OpenRouter AI (Free)</span>
+          </button>
+
           {isCompleted && (
             <button
               type="button"
@@ -224,6 +236,13 @@ export const WorkspacePage = () => {
         onClose={() => setIsColabGuideOpen(false)}
         job={job}
         onTranscriptImported={fetchJob}
+      />
+
+      <AIAssistantModal
+        isOpen={isAIOpen}
+        onClose={() => setIsAIOpen(false)}
+        jobId={job.id}
+        onUpdate={(newTr) => setJob((prev) => ({ ...prev, transcript: newTr }))}
       />
     </div>
   );

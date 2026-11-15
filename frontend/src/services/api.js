@@ -211,6 +211,133 @@ export const api = {
   getDownloadUrl: (jobId, format = 'srt', timestamps = true) => {
     return `${API_BASE}/transcriptions/${jobId}/download/?format=${format}&timestamps=${timestamps}`;
   },
+
+  // OpenRouter Free AI Services
+  aiEnhance: async (jobId, openRouterKey = '') => {
+    const key = openRouterKey || localStorage.getItem('vaani_openrouter_key') || '';
+    try {
+      const res = await client.post(`/transcriptions/${jobId}/ai-enhance/`, {
+        openrouter_key: key,
+      });
+      return res.data;
+    } catch {
+      // Direct client fallback to OpenRouter Free endpoint
+      if (!key) throw new Error('Please enter your free OpenRouter API key (get one free at openrouter.ai/keys).');
+      const job = await api.getJob(jobId);
+      const segments = job.transcript?.segments || [];
+      const messages = [
+        {
+          role: 'system',
+          content: 'You are an expert multilingual subtitle editor. Fix grammar, spelling, and add proper punctuation to subtitle segments. Preserve Devanagari Hindi. NEVER alter timing. Return strictly JSON: {"segments": [{"segment_index": 0, "text": "..."}]}',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify(segments.map(s => ({ segment_index: s.segment_index, text: s.text }))),
+        },
+      ];
+
+      const resp = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: 'google/gemini-2.0-flash-exp:free',
+        messages,
+        response_format: { type: 'json_object' },
+      }, {
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'HTTP-Referer': 'https://frontend-kappa-gray-54.vercel.app',
+          'X-Title': 'VAANI AI',
+        },
+      });
+
+      const parsed = JSON.parse(resp.data.choices[0].message.content);
+      const map = {};
+      parsed.segments.forEach(s => { map[s.segment_index] = s.text; });
+      const updatedSegs = segments.map(s => ({ ...s, text: map[s.segment_index] || s.text }));
+      await api.editTranscript(jobId, { segments: updatedSegs });
+      return { message: 'Polished via OpenRouter Free AI', transcript: { ...job.transcript, segments: updatedSegs } };
+    }
+  },
+
+  aiTranslate: async (jobId, targetLanguage = 'en', openRouterKey = '') => {
+    const key = openRouterKey || localStorage.getItem('vaani_openrouter_key') || '';
+    try {
+      const res = await client.post(`/transcriptions/${jobId}/ai-translate/`, {
+        target_language: targetLanguage,
+        openrouter_key: key,
+      });
+      return res.data;
+    } catch {
+      if (!key) throw new Error('Please enter your free OpenRouter API key.');
+      const job = await api.getJob(jobId);
+      const segments = job.transcript?.segments || [];
+      const messages = [
+        {
+          role: 'system',
+          content: `You are a film subtitle translator. Translate subtitle segments into '${targetLanguage}'. Return strictly JSON: {"translated": [{"segment_index": 0, "text": "..."}]}`,
+        },
+        {
+          role: 'user',
+          content: JSON.stringify(segments.map(s => ({ segment_index: s.segment_index, text: s.text }))),
+        },
+      ];
+
+      const resp = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: 'google/gemini-2.0-flash-exp:free',
+        messages,
+        response_format: { type: 'json_object' },
+      }, {
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'HTTP-Referer': 'https://frontend-kappa-gray-54.vercel.app',
+          'X-Title': 'VAANI AI',
+        },
+      });
+
+      const parsed = JSON.parse(resp.data.choices[0].message.content);
+      const map = {};
+      parsed.translated.forEach(s => { map[s.segment_index] = s.text; });
+      const updatedSegs = segments.map(s => ({ ...s, text: map[s.segment_index] || s.text }));
+      await api.editTranscript(jobId, { segments: updatedSegs });
+      return { message: `Translated to ${targetLanguage}`, transcript: { ...job.transcript, detected_language: targetLanguage, segments: updatedSegs } };
+    }
+  },
+
+  aiSummarize: async (jobId, openRouterKey = '') => {
+    const key = openRouterKey || localStorage.getItem('vaani_openrouter_key') || '';
+    try {
+      const res = await client.post(`/transcriptions/${jobId}/ai-summarize/`, {
+        openrouter_key: key,
+      });
+      return res.data;
+    } catch {
+      if (!key) throw new Error('Please enter your free OpenRouter API key.');
+      const job = await api.getJob(jobId);
+      const messages = [
+        {
+          role: 'system',
+          content: 'You are an AI research assistant. Summarize the video transcript. Return strictly JSON: {"title": "...", "overview": "...", "key_takeaways": ["..."], "topics": ["..."], "sentiment": "..."}',
+        },
+        {
+          role: 'user',
+          content: job.transcript?.full_text || '',
+        },
+      ];
+
+      const resp = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: 'google/gemini-2.0-flash-exp:free',
+        messages,
+        response_format: { type: 'json_object' },
+      }, {
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'HTTP-Referer': 'https://frontend-kappa-gray-54.vercel.app',
+          'X-Title': 'VAANI AI',
+        },
+      });
+
+      const parsed = JSON.parse(resp.data.choices[0].message.content);
+      return { summary: parsed };
+    }
+  },
 };
 
 export default api;
